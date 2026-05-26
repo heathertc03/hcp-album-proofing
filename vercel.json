@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/album/:id", "destination": "/album.html" }
+  ]
+}
