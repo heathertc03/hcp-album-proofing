@@ -155,6 +155,16 @@ body{
 .album-meta-row{display:flex;justify-content:space-between;align-items:center}
 .album-stats{font-size:10px;color:var(--taupe)}
 
+.album-actions{display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--stone)}
+.album-action-btn{
+  flex:1;padding:5px 8px;
+  font-family:'Jost',sans-serif;font-size:10px;font-weight:400;letter-spacing:.1em;text-transform:uppercase;
+  cursor:pointer;border:1px solid var(--stone);background:transparent;color:var(--warm-gray);
+  display:flex;align-items:center;justify-content:center;gap:4px;transition:all .15s;
+}
+.album-action-btn:hover{background:var(--stone);color:var(--charcoal)}
+.album-action-btn.delete:hover{background:var(--blush-light);border-color:var(--blush);color:#7a3a2a}
+
 .loading-msg,.empty-msg{font-size:13px;color:var(--taupe);font-family:'Cormorant Garamond',serif;font-style:italic;padding:1rem 0}
 .spin{animation:spin 1s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
