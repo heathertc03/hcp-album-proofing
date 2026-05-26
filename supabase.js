@@ -46,6 +46,19 @@ const db = {
     return res.json();
   },
 
+  async delete(table, id) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return true;
+  },
+
   async uploadImage(path, file) {
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/spreads/${path}`, {
       method: 'POST',
