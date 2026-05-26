@@ -10,7 +10,6 @@
 </head>
 <body>
 
-<!-- HEADER -->
 <header class="site-header">
   <div class="logo-wrap">
     <span class="logo-main">Heather Carraway</span>
@@ -22,8 +21,7 @@
   </div>
 </header>
 
-<!-- TABS -->
-<div class="tabbar" id="tabbar">
+<div class="tabbar">
   <div class="tab active" id="tab-viewer" onclick="switchTab('viewer')"><i class="ti ti-photo"></i> Spreads</div>
   <div class="tab" id="tab-comments" onclick="switchTab('comments')"><i class="ti ti-message-circle"></i> Comments <span class="tab-count" id="comment-count">0</span></div>
   <div class="tab" id="tab-summary" onclick="switchTab('summary')"><i class="ti ti-chart-pie"></i> Summary</div>
@@ -34,7 +32,6 @@
   <div class="sidebar-wrap">
     <div class="main-col">
 
-      <!-- Spread Stage -->
       <div class="spread-stage">
         <div class="spread-img-wrap" id="spread-display">
           <div style="color:#888;font-family:'Cormorant Garamond',serif;font-style:italic">Loading spreads…</div>
@@ -46,14 +43,9 @@
         </div>
       </div>
 
-      <!-- Thumbnail Strip -->
       <div class="panel">
         <div class="panel-header">
           <span class="panel-label">All Spreads</span>
-          <button class="btn" id="btn-add-spreads" onclick="document.getElementById('spread-upload').click()" style="font-size:10px;padding:5px 10px;display:none">
-            <input type="file" id="spread-upload" multiple accept="image/jpeg,image/jpg,image/png,image/webp" onchange="handleSpreadUpload(this.files)" style="display:none">
-            <i class="ti ti-plus"></i> Add Spreads
-          </button>
         </div>
         <div class="panel-body">
           <div class="thumbstrip" id="thumb-strip"><span class="no-data">Loading…</span></div>
@@ -65,33 +57,37 @@
     <!-- SIDEBAR -->
     <div class="sidebar">
 
-      <!-- Spread Status -->
+      <!-- Whole-album approval -->
       <div class="panel">
-        <div class="panel-header">
-          <span class="panel-label">Spread Status</span>
-          <span class="badge badge-pending" id="status-badge">Pending</span>
-        </div>
+        <div class="panel-header"><span class="panel-label">Album Approval</span></div>
         <div class="panel-body">
-          <div class="status-btns">
-            <div class="status-btn approve" id="btn-approve" onclick="setStatus('approved')">
-              <i class="ti ti-circle-check" style="font-size:16px;display:block;margin-bottom:3px"></i>
-              Approve
-            </div>
-            <div class="status-btn changes" id="btn-changes" onclick="setStatus('changes')">
-              <i class="ti ti-refresh-alert" style="font-size:16px;display:block;margin-bottom:3px"></i>
-              Revise
-            </div>
-          </div>
+          <button class="status-btn approve" id="btn-approve-album" onclick="toggleAlbumApproval()" style="width:100%;padding:12px">
+            <i class="ti ti-circle-check" style="font-size:16px;display:block;margin-bottom:3px"></i>
+            Approve Full Album
+          </button>
         </div>
       </div>
 
-      <!-- Comments on this spread -->
+      <!-- Per-spread revision flag -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-label">This Spread</span>
+        </div>
+        <div class="panel-body">
+          <button class="status-btn changes" id="btn-changes" onclick="setSpreadRevision()" style="width:100%;padding:12px">
+            <i class="ti ti-refresh-alert" style="font-size:16px;display:block;margin-bottom:3px"></i>
+            Flag for Revision
+          </button>
+        </div>
+      </div>
+
+      <!-- Comments -->
       <div class="panel">
         <div class="panel-header"><span class="panel-label">Notes on this spread</span></div>
         <div class="panel-body">
           <div class="comment-list" id="spread-comments"><span class="no-data">No notes yet</span></div>
           <div class="comment-input-wrap">
-            <input type="text" id="commenter-name" placeholder="Your name" style="margin-bottom:6px">
+            <input type="text" id="commenter-name" placeholder="Your name">
             <textarea id="comment-text" placeholder="Add a note on this spread…"></textarea>
             <button class="btn btn-dark" onclick="addComment()" style="align-self:flex-end;font-size:10px">
               <i class="ti ti-send"></i> Send
@@ -104,11 +100,11 @@
       <div class="panel">
         <div class="panel-header"><span class="panel-label">Client Link</span></div>
         <div class="panel-body">
-          <div class="share-row">
-            <span class="share-url" id="share-url">—</span>
-            <button class="icon-btn" onclick="copyLink()"><i class="ti ti-copy" style="font-size:13px"></i></button>
-          </div>
-          <p style="font-size:11px;color:var(--taupe);margin-top:8px;line-height:1.5;font-family:'Cormorant Garamond',serif;font-style:italic">Share this link with your client to collect approvals and feedback.</p>
+          <input type="text" id="share-url-text" readonly style="width:100%;margin-bottom:8px;font-size:11px;background:var(--cream);cursor:text">
+          <button class="btn btn-dark" id="copy-link-btn" onclick="copyLink()" style="width:100%;justify-content:center">
+            <i class="ti ti-copy"></i> Copy Link
+          </button>
+          <p style="font-size:11px;color:var(--taupe);margin-top:8px;line-height:1.5;font-family:'Cormorant Garamond',serif;font-style:italic">Send this link to your client to collect approvals and feedback.</p>
         </div>
       </div>
 
@@ -131,20 +127,18 @@
   <div class="gold-divider"></div>
   <div class="stats-grid" style="margin-bottom:1.5rem">
     <div class="stat-card"><div class="stat-num" id="sum-total">0</div><div class="stat-label">Spreads</div></div>
-    <div class="stat-card"><div class="stat-num" id="sum-approved" style="color:var(--sage)">0</div><div class="stat-label">Approved</div></div>
+    <div class="stat-card"><div class="stat-num" id="sum-approved" style="color:var(--sage);font-size:20px;padding-top:6px">—</div><div class="stat-label">Approved</div></div>
     <div class="stat-card"><div class="stat-num" id="sum-changes" style="color:var(--blush)">0</div><div class="stat-label">Revisions</div></div>
     <div class="stat-card"><div class="stat-num" id="sum-comments">0</div><div class="stat-label">Comments</div></div>
   </div>
   <div id="summary-spread-list"></div>
-  <div style="margin-top:1.5rem;display:flex;gap:8px">
+  <div style="margin-top:1.5rem">
     <button class="btn btn-dark" onclick="exportSummary()"><i class="ti ti-file-download"></i> Export Summary</button>
   </div>
 </div>
 
 <script src="supabase.js"></script>
 <script src="viewer.js"></script>
-<script>
-  initViewer();
-</script>
+<script>initViewer();</script>
 </body>
 </html>
