@@ -5,13 +5,11 @@ let spreads = [];
 let comments = [];
 let currentIndex = 0;
 let albumId = null;
-let isAdmin = false;
 
 // ── Init ─────────────────────────────────────────────────────
 async function initViewer() {
   const params = new URLSearchParams(window.location.search);
   albumId = params.get('id');
-  isAdmin = params.get('admin') === '1';
 
   if (!albumId) {
     document.getElementById('spread-display').innerHTML =
@@ -19,14 +17,7 @@ async function initViewer() {
     return;
   }
 
-  // Show admin-only controls
-  if (isAdmin) {
-    document.getElementById('btn-add-spreads').style.display = '';
-  }
-
   await loadAlbumData();
-
-  // Poll for new comments every 15s (so photographer sees client activity)
   setInterval(refreshComments, 15000);
 }
 
@@ -48,16 +39,16 @@ async function loadAlbumData() {
     spreads = spreadArr;
     comments = commentArr;
 
-    // Set header title
     document.getElementById('album-title-header').textContent =
       `${album.client} — ${album.title}`;
     document.title = `${album.title} · Heather Carraway Photography`;
 
-    // Set share URL
+    // Share URL — full link for copying
     const shareUrl = `${window.location.origin}/album.html?id=${albumId}`;
-    document.getElementById('share-url').textContent = shareUrl;
+    document.getElementById('share-url-text').value = shareUrl;
 
     renderViewer();
+    renderAlbumApproval();
   } catch (err) {
     document.getElementById('spread-display').innerHTML =
       `<span style="color:var(--blush);font-size:13px">Error: ${err.message}</span>`;
@@ -69,14 +60,14 @@ async function refreshComments() {
     comments = await db.get('comments', `?album_id=eq.${albumId}&order=created_at.asc`);
     renderSpreadComments();
     updateTabCount();
-  } catch (e) { /* silent fail */ }
+  } catch (e) {}
 }
 
 // ── Rendering ────────────────────────────────────────────────
 function renderViewer() {
   renderSpread();
   renderThumbs();
-  renderStatus();
+  renderSpreadStatus();
   renderSpreadComments();
   updateTabCount();
 }
@@ -101,21 +92,29 @@ function renderThumbs() {
   const strip = document.getElementById('thumb-strip');
   if (!spreads.length) { strip.innerHTML = '<span class="no-data">No spreads yet</span>'; return; }
   strip.innerHTML = spreads.map((s, i) => `
-    <div class="thumb ${i === currentIndex ? 'active' : ''}" onclick="goTo(${i})" title="Spread ${i+1}">
+    <div class="thumb ${i === currentIndex ? 'active' : ''}" onclick="goTo(${i})" title="Spread ${i + 1}">
       <img src="${s.src}" alt="">
       <span class="thumb-num">${i + 1}</span>
-      ${s.status !== 'pending' ? `<span class="thumb-status ${s.status}"></span>` : ''}
+      ${s.status === 'changes' ? `<span class="thumb-status changes"></span>` : ''}
     </div>`).join('');
 }
 
-function renderStatus() {
+function renderSpreadStatus() {
   if (!spreads.length) return;
   const s = spreads[currentIndex];
-  const badge = document.getElementById('status-badge');
-  badge.textContent = s.status === 'approved' ? 'Approved' : s.status === 'changes' ? 'Revision Needed' : 'Pending';
-  badge.className = 'badge ' + (s.status === 'approved' ? 'badge-approved' : s.status === 'changes' ? 'badge-changes' : 'badge-pending');
-  document.getElementById('btn-approve').classList.toggle('active', s.status === 'approved');
   document.getElementById('btn-changes').classList.toggle('active', s.status === 'changes');
+}
+
+function renderAlbumApproval() {
+  const btn = document.getElementById('btn-approve-album');
+  if (!btn) return;
+  if (album.approved) {
+    btn.textContent = '✓ Album Approved';
+    btn.classList.add('active');
+  } else {
+    btn.textContent = 'Approve Full Album';
+    btn.classList.remove('active');
+  }
 }
 
 function renderSpreadComments() {
@@ -128,7 +127,7 @@ function renderSpreadComments() {
     <div class="comment ${c.author !== 'You' ? 'client-comment' : ''}">
       <div class="comment-meta">
         <span class="comment-author">${c.author}</span>
-        <span class="comment-time">${new Date(c.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+        <span class="comment-time">${new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       <div class="comment-text">${c.text}</div>
     </div>`).join('');
@@ -139,37 +138,47 @@ function updateTabCount() {
   document.getElementById('comment-count').textContent = comments.length;
 }
 
-// ── Navigation ───────────────────────────────────────────────
+// ── Navigation ────────────────────────────────────────────────
 function goTo(i) { currentIndex = i; renderViewer(); }
 function prevSpread() { if (currentIndex > 0) { currentIndex--; renderViewer(); } }
 function nextSpread() { if (currentIndex < spreads.length - 1) { currentIndex++; renderViewer(); } }
 
-// ── Status update ────────────────────────────────────────────
-async function setStatus(s) {
+// ── Spread revision flag ──────────────────────────────────────
+async function setSpreadRevision() {
   if (!spreads.length) return;
   const spread = spreads[currentIndex];
-  const newStatus = spread.status === s ? 'pending' : s;
-
+  const newStatus = spread.status === 'changes' ? 'pending' : 'changes';
   try {
     await db.patch('spreads', spread.id, { status: newStatus });
     spread.status = newStatus;
-    renderStatus();
+    renderSpreadStatus();
     renderThumbs();
   } catch (err) {
-    alert('Could not save status: ' + err.message);
+    alert('Could not save: ' + err.message);
   }
 }
 
-// ── Add comment ──────────────────────────────────────────────
+// ── Whole-album approval ──────────────────────────────────────
+async function toggleAlbumApproval() {
+  const newVal = !album.approved;
+  try {
+    await db.patch('albums', albumId, { approved: newVal });
+    album.approved = newVal;
+    renderAlbumApproval();
+  } catch (err) {
+    alert('Could not save: ' + err.message);
+  }
+}
+
+// ── Add comment ───────────────────────────────────────────────
 async function addComment() {
   if (!spreads.length) return;
   const text = document.getElementById('comment-text').value.trim();
   const nameInput = document.getElementById('commenter-name');
-  const author = nameInput ? (nameInput.value.trim() || 'Client') : 'You';
+  const author = nameInput ? (nameInput.value.trim() || 'Client') : 'Client';
   if (!text) return;
 
   const spread = spreads[currentIndex];
-
   try {
     const [newComment] = await db.post('comments', {
       id: generateId(),
@@ -179,7 +188,6 @@ async function addComment() {
       author,
       text
     });
-
     comments.push(newComment);
     document.getElementById('comment-text').value = '';
     renderSpreadComments();
@@ -189,27 +197,20 @@ async function addComment() {
   }
 }
 
-// ── Add more spreads (admin only) ─────────────────────────────
-async function handleSpreadUpload(files) {
-  const sorted = Array.from(files).sort((a, b) => a.name.localeCompare(b.name));
-  const startPos = spreads.length;
-
-  for (let i = 0; i < sorted.length; i++) {
-    const file = sorted[i];
-    const path = `${albumId}/${generateId()}-${file.name.replace(/\s+/g, '-')}`;
-    const publicUrl = await db.uploadImage(path, file);
-    const [spread] = await db.post('spreads', {
-      id: generateId(),
-      album_id: albumId,
-      name: file.name,
-      src: publicUrl,
-      status: 'pending',
-      position: startPos + i
-    });
-    spreads.push(spread);
+// ── Copy link ─────────────────────────────────────────────────
+function copyLink() {
+  const input = document.getElementById('share-url-text');
+  input.select();
+  input.setSelectionRange(0, 99999);
+  try {
+    navigator.clipboard.writeText(input.value);
+  } catch (e) {
+    document.execCommand('copy');
   }
-
-  renderViewer();
+  const btn = document.getElementById('copy-link-btn');
+  const original = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-check" style="color:var(--sage)"></i> Copied!';
+  setTimeout(() => { btn.innerHTML = original; }, 2000);
 }
 
 // ── Tabs ──────────────────────────────────────────────────────
@@ -231,7 +232,7 @@ function renderAllComments() {
     <div class="comment" style="margin-bottom:10px;cursor:pointer" onclick="goTo(${c.spread_num - 1});switchTab('viewer')">
       <div class="comment-meta">
         <span class="comment-author">${c.author}</span>
-        <span class="comment-time">${new Date(c.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+        <span class="comment-time">${new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       <div class="comment-text">${c.text}</div>
       <div class="comment-spread-label">Spread ${c.spread_num}</div>
@@ -239,41 +240,34 @@ function renderAllComments() {
 }
 
 function renderSummary() {
-  const approved = spreads.filter(s => s.status === 'approved').length;
   const changes = spreads.filter(s => s.status === 'changes').length;
   document.getElementById('sum-total').textContent = spreads.length;
-  document.getElementById('sum-approved').textContent = approved;
+  document.getElementById('sum-approved').textContent = album && album.approved ? 'Yes' : 'No';
   document.getElementById('sum-changes').textContent = changes;
   document.getElementById('sum-comments').textContent = comments.length;
 
   document.getElementById('summary-spread-list').innerHTML = spreads.map((s, i) => {
     const cs = comments.filter(c => c.spread_id === s.id);
-    const col = s.status === 'approved' ? 'var(--sage)' : s.status === 'changes' ? 'var(--blush)' : 'var(--taupe)';
+    const hasRevision = s.status === 'changes';
     return `<div class="summary-row" onclick="goTo(${i});switchTab('viewer')">
       <img src="${s.src}" style="width:56px;height:28px;object-fit:cover;background:#1a1715">
       <div style="flex:1">
         <div class="summary-spread-name">Spread ${i + 1}</div>
         <div class="summary-comment-count">${cs.length} comment${cs.length !== 1 ? 's' : ''}</div>
       </div>
-      <span class="summary-status" style="color:${col}">${s.status === 'approved' ? 'Approved' : s.status === 'changes' ? 'Revision' : 'Pending'}</span>
+      <span class="summary-status" style="color:${hasRevision ? 'var(--blush)' : 'var(--taupe)'}">
+        ${hasRevision ? 'Needs Revision' : '—'}
+      </span>
     </div>`;
   }).join('');
 }
 
-function copyLink() {
-  const url = document.getElementById('share-url').textContent;
-  navigator.clipboard.writeText(url).catch(() => {});
-  const btn = event.currentTarget;
-  btn.innerHTML = '<i class="ti ti-check" style="font-size:13px;color:var(--sage)"></i>';
-  setTimeout(() => { btn.innerHTML = '<i class="ti ti-copy" style="font-size:13px"></i>'; }, 1500);
-}
-
 function exportSummary() {
   if (!album) return;
-  let txt = `ALBUM PROOF SUMMARY\n${'—'.repeat(40)}\n${album.title}\n${album.client}\nExported: ${new Date().toLocaleDateString()}\n\n`;
+  let txt = `ALBUM PROOF SUMMARY\n${'—'.repeat(40)}\n${album.title}\n${album.client}\nAlbum Approved: ${album.approved ? 'YES' : 'NO'}\nExported: ${new Date().toLocaleDateString()}\n\n`;
   spreads.forEach((s, i) => {
     const cs = comments.filter(c => c.spread_id === s.id);
-    txt += `Spread ${i + 1}: ${s.status.toUpperCase()}\n`;
+    txt += `Spread ${i + 1}: ${s.status === 'changes' ? 'NEEDS REVISION' : 'OK'}\n`;
     cs.forEach(c => txt += `  ${c.author}: ${c.text}\n`);
     txt += '\n';
   });
