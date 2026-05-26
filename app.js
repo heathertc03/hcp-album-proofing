@@ -17,10 +17,10 @@ async function loadAlbums() {
 
     if (albums.length === 0) {
       empty.style.display = 'block';
+      grid.style.display = 'none';
       return;
     }
 
-    // Group spreads and comments by album
     const spreadsByAlbum = {};
     spreads.forEach(s => {
       if (!spreadsByAlbum[s.album_id]) spreadsByAlbum[s.album_id] = [];
@@ -31,17 +31,16 @@ async function loadAlbums() {
       commentsByAlbum[c.album_id] = (commentsByAlbum[c.album_id] || 0) + 1;
     });
 
-    // Render cards
     const cards = albums.map(a => {
       const sp = spreadsByAlbum[a.id] || [];
       const commentCount = commentsByAlbum[a.id] || 0;
-      const approved = sp.filter(s => s.status === 'approved').length;
       const changes = sp.filter(s => s.status === 'changes').length;
-      const status = sp.length === 0 ? 'empty'
+      const albumApproved = a.approved;
+      const status = albumApproved ? 'approved'
+        : sp.length === 0 ? 'empty'
         : changes > 0 ? 'changes'
-        : approved === sp.length && sp.length > 0 ? 'approved'
         : 'pending';
-      const label = status === 'approved' ? 'All Approved'
+      const label = status === 'approved' ? 'Approved'
         : status === 'changes' ? 'Has Revisions'
         : status === 'empty' ? 'Empty' : 'In Review';
       const badgeCls = status === 'approved' ? 'badge-approved'
@@ -60,6 +59,14 @@ async function loadAlbums() {
             <span class="album-stats">${sp.length} spread${sp.length !== 1 ? 's' : ''} · ${commentCount} note${commentCount !== 1 ? 's' : ''}</span>
             <span class="badge ${badgeCls}">${label}</span>
           </div>
+          <div class="album-actions" onclick="event.stopPropagation()">
+            <button class="album-action-btn" onclick="openRenameModal('${a.id}', '${escAttr(a.title)}', '${escAttr(a.client)}')">
+              <i class="ti ti-pencil"></i> Rename
+            </button>
+            <button class="album-action-btn delete" onclick="confirmDelete('${a.id}', '${escAttr(a.title)}')">
+              <i class="ti ti-trash"></i> Delete
+            </button>
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -72,7 +79,50 @@ async function loadAlbums() {
   }
 }
 
-// ── Modal ────────────────────────────────────────────────────
+function escAttr(str) {
+  return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+// ── Rename modal ─────────────────────────────────────────────
+function openRenameModal(id, title, client) {
+  document.getElementById('rename-album-id').value = id;
+  document.getElementById('rename-title').value = title;
+  document.getElementById('rename-client').value = client;
+  document.getElementById('rename-modal').classList.add('open');
+}
+
+async function saveRename() {
+  const id = document.getElementById('rename-album-id').value;
+  const title = document.getElementById('rename-title').value.trim() || 'Untitled Album';
+  const client = document.getElementById('rename-client').value.trim() || 'Client';
+  try {
+    await db.patch('albums', id, { title, client });
+    closeModal('rename-modal');
+    loadAlbums();
+  } catch (err) {
+    alert('Could not save: ' + err.message);
+  }
+}
+
+// ── Delete album ─────────────────────────────────────────────
+function confirmDelete(id, title) {
+  document.getElementById('delete-album-id').value = id;
+  document.getElementById('delete-album-name').textContent = title;
+  document.getElementById('delete-modal').classList.add('open');
+}
+
+async function doDelete() {
+  const id = document.getElementById('delete-album-id').value;
+  try {
+    await db.delete('albums', id);
+    closeModal('delete-modal');
+    loadAlbums();
+  } catch (err) {
+    alert('Could not delete: ' + err.message);
+  }
+}
+
+// ── Modals ────────────────────────────────────────────────────
 function openNewAlbumModal() {
   document.getElementById('new-album-modal').classList.add('open');
   pendingFiles = [];
@@ -81,6 +131,7 @@ function openNewAlbumModal() {
   document.getElementById('modal-title-inp').value = '';
   document.getElementById('modal-progress').style.display = 'none';
   document.getElementById('modal-create-btn').disabled = false;
+  document.getElementById('modal-create-btn').innerHTML = '<i class="ti ti-plus"></i> Create Album';
 }
 
 function closeModal(id) {
@@ -93,7 +144,6 @@ function previewModalFiles(files) {
     `${pendingFiles.length} spread${pendingFiles.length !== 1 ? 's' : ''} selected`;
 }
 
-// ── Quick upload from dashboard ──────────────────────────────
 function handleQuickUpload(files) {
   pendingFiles = Array.from(files).sort((a, b) => a.name.localeCompare(b.name));
   document.getElementById('modal-client').value = '';
@@ -104,7 +154,7 @@ function handleQuickUpload(files) {
   document.getElementById('modal-progress').style.display = 'none';
 }
 
-// ── Create album + upload spreads ────────────────────────────
+// ── Create album ──────────────────────────────────────────────
 async function createAlbum() {
   const client = document.getElementById('modal-client').value.trim() || 'Client';
   const title = document.getElementById('modal-title-inp').value.trim() || 'Untitled Album';
@@ -119,23 +169,19 @@ async function createAlbum() {
 
   try {
     const albumId = generateId();
-
-    // 1. Create album record
     progressLabel.textContent = 'Creating album…';
-    await db.post('albums', { id: albumId, title, client });
+    await db.post('albums', { id: albumId, title, client, approved: false });
 
-    // 2. Upload each spread
     const total = pendingFiles.length;
     let coverUrl = null;
 
     for (let i = 0; i < total; i++) {
       const file = pendingFiles[i];
       progressLabel.textContent = `Uploading spread ${i + 1} of ${total}…`;
-      progressBar.style.width = `${Math.round(((i) / total) * 100)}%`;
+      progressBar.style.width = `${Math.round((i / total) * 100)}%`;
 
       const path = `${albumId}/${generateId()}-${file.name.replace(/\s+/g, '-')}`;
       const publicUrl = await db.uploadImage(path, file);
-
       if (i === 0) coverUrl = publicUrl;
 
       await db.post('spreads', {
@@ -150,17 +196,11 @@ async function createAlbum() {
       progressBar.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
     }
 
-    // 3. Save cover URL on album
-    if (coverUrl) {
-      await db.patch('albums', albumId, { cover_url: coverUrl });
-    }
+    if (coverUrl) await db.patch('albums', albumId, { cover_url: coverUrl });
 
     progressLabel.textContent = 'Done!';
     progressBar.style.width = '100%';
-
-    setTimeout(() => {
-      window.location.href = `album.html?id=${albumId}`;
-    }, 400);
+    setTimeout(() => { window.location.href = `album.html?id=${albumId}`; }, 400);
 
   } catch (err) {
     btn.disabled = false;
