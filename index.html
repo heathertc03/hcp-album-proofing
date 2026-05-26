@@ -10,7 +10,6 @@
 </head>
 <body>
 
-<!-- HEADER -->
 <header class="site-header">
   <div class="logo-wrap">
     <span class="logo-main">Heather Carraway</span>
@@ -23,7 +22,6 @@
   </div>
 </header>
 
-<!-- ADMIN DASHBOARD -->
 <main class="admin-wrap">
   <div class="page-eyebrow">Client Albums</div>
   <div class="page-heading">Your Proof Gallery</div>
@@ -36,9 +34,7 @@
   </div>
 
   <div id="album-grid-wrap">
-    <div id="loading-state" class="loading-msg">
-      <i class="ti ti-loader spin"></i> Loading albums…
-    </div>
+    <div id="loading-state" class="loading-msg"><i class="ti ti-loader spin"></i> Loading albums…</div>
     <div id="album-grid" style="display:none"></div>
     <p id="empty-state" style="display:none" class="empty-msg">No albums yet. Upload spreads above to get started.</p>
   </div>
@@ -72,10 +68,51 @@
   </div>
 </div>
 
+<!-- RENAME MODAL -->
+<div class="modal-bg" id="rename-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="page-eyebrow" style="margin-bottom:4px">Edit</div>
+        <div class="page-heading" style="font-size:22px;margin-bottom:0">Rename Album</div>
+      </div>
+      <button class="icon-btn" onclick="closeModal('rename-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <input type="hidden" id="rename-album-id">
+    <div class="field"><label>Client Name</label><input type="text" id="rename-client" placeholder="Client name"></div>
+    <div class="field"><label>Album Title</label><input type="text" id="rename-title" placeholder="Album title"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeModal('rename-modal')">Cancel</button>
+      <button class="btn btn-dark" onclick="saveRename()"><i class="ti ti-check"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="modal-bg" id="delete-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="page-eyebrow" style="margin-bottom:4px">Confirm</div>
+        <div class="page-heading" style="font-size:22px;margin-bottom:0">Delete Album</div>
+      </div>
+      <button class="icon-btn" onclick="closeModal('delete-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <input type="hidden" id="delete-album-id">
+    <p style="font-size:14px;font-family:'Cormorant Garamond',serif;color:var(--charcoal);margin-bottom:1.5rem;line-height:1.6">
+      Are you sure you want to delete <strong id="delete-album-name"></strong>? This will remove the album and all its comments permanently.
+    </p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeModal('delete-modal')">Cancel</button>
+      <button class="btn" onclick="doDelete()" style="background:var(--blush);border-color:var(--blush);color:#fff">
+        <i class="ti ti-trash"></i> Delete
+      </button>
+    </div>
+  </div>
+</div>
+
 <script src="supabase.js"></script>
 <script src="app.js"></script>
-<script>
-  loadAlbums();
-</script>
+<script>loadAlbums();</script>
 </body>
 </html>
